@@ -23,6 +23,7 @@ Config.read("config.ini")
 
 login = Config.get("auth", "username")
 password = Config.get("auth", "password")
+token = Config.get("auth", "token")
 messages_id = Config.get("messages", "chat_id")
 messages_type = Config.get("messages", "chat_type")
 app_id = Config.get("application", "app_id")
@@ -36,15 +37,15 @@ elif messages_type == "chat":
 else:
     sys.exit("Messages type must be either interlocutor or chat.")
 
-
+if not token:
 # auth to get token
 
-try:
-    token, user_id = vk_auth.auth(login, password, app_id, 'messages')
-except RuntimeError:
-    sys.exit("Incorrect login/password. Please check it.")
+    try:
+        token, user_id = vk_auth.auth(login, password, app_id, 'messages')
+    except RuntimeError:
+        sys.exit("Incorrect login/password. Please check it.")
 
-sys.stdout.write('Authorized vk\n')
+    sys.stdout.write('Authorized vk (token = %s)\n' % token)
 
 # get some information about chat
 
@@ -56,16 +57,12 @@ out = codecs.open(
     "w+", "utf-8"
 )
 
-human_uids = [messages[1]["uid"]]
-
-# Export uids from dialogue.
-# Due to vk.api, start from 1.
-for i in range(1, 100):
-    try:
-        if messages[i]["uid"] != human_uids[0]:
-            human_uids.append(messages[i]["uid"])
-    except IndexError:
-        pass
+if not is_chat:
+    human_uids = [messages[1]["uid"]]
+else:
+    chat_info = _api("messages.getChat", [('chat_id', messages_id)], token)
+    # fixme: receives not all human_ids in some chats
+    human_uids = chat_info['users']
 
 # Export details from uids
 human_details = _api(
@@ -79,6 +76,9 @@ for human_detail in human_details:
     human_details_index[human_detail["uid"]] = human_detail
 
 def write_message(who, to_write):
+    if who not in human_details_index.keys():
+        human_details_index[who] = {'first_name': 'UNKNOWN', 'last_name': 'UNKNOWN'}
+
     out.write(u'[{date}] {full_name}:\n {message} \n\n\n'.format(**{
             'date': datetime.datetime.fromtimestamp(
                 int(to_write["date"])).strftime('%Y-%m-%d %H:%M:%S'),
