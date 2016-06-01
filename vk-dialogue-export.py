@@ -38,7 +38,7 @@ else:
     sys.exit("Messages type must be either interlocutor or chat.")
 
 if not token:
-# auth to get token
+    # auth to get token
 
     try:
         token, user_id = vk_auth.auth(login, password, app_id, 'messages')
@@ -61,7 +61,6 @@ if not is_chat:
     human_uids = [messages[1]["uid"]]
 else:
     chat_info = _api("messages.getChat", [('chat_id', messages_id)], token)
-    # fixme: receives not all human_ids in some chats
     human_uids = chat_info['users']
 
 # Export details from uids
@@ -71,23 +70,32 @@ human_details = _api(
     token
 )
 
-human_details_index = {}
+human_details_dict = {}
 for human_detail in human_details:
-    human_details_index[human_detail["uid"]] = human_detail
+    human_details_dict[human_detail["uid"]] = human_detail
+
 
 def write_message(who, to_write):
-    if who not in human_details_index.keys():
-        human_details_index[who] = {'first_name': 'UNKNOWN', 'last_name': 'UNKNOWN'}
+    if who not in human_details_dict.keys():
+        # person has left this chat
+        # try to get his info
+        try:
+            human_detail = _api("users.get",
+                                [('uids', '%s' % who)],
+                                token)[0]
+            human_details_dict[who] = human_detail
+        except:
+            human_details_dict[who] = {'first_name': 'UNKNOWN', 'last_name': 'UNKNOWN'}
 
     out.write(u'[{date}] {full_name}:\n {message} \n\n\n'.format(**{
-            'date': datetime.datetime.fromtimestamp(
-                int(to_write["date"])).strftime('%Y-%m-%d %H:%M:%S'),
+        'date': datetime.datetime.fromtimestamp(
+            int(to_write["date"])).strftime('%Y-%m-%d %H:%M:%S'),
 
-            'full_name': '%s %s' % (
-                human_details_index[who]["first_name"], human_details_index[who]["last_name"]),
+        'full_name': '%s %s' % (
+            human_details_dict[who]["first_name"], human_details_dict[who]["last_name"]),
 
-            'message': to_write["body"].replace('<br>', '\n')
-        }
+        'message': to_write["body"].replace('<br>', '\n')
+    }
     ))
 
 
